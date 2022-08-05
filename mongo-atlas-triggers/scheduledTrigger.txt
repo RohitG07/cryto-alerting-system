@@ -1,0 +1,33 @@
+// SCHEDULED TRIGGER
+// RUNS EVERY 5 MINS
+
+exports = async function() {
+  const axios = require("axios").default;
+  
+  const collection = context.services.get("CRYPTO-ALERT-MERN").db("CRYPTO-ALERTS").collection("alerts");
+  const cursor = collection.find();
+  let document;
+  while(document = await cursor.next()) {
+    try {
+      const { data } = await axios.get(
+        `https://coinranking1.p.rapidapi.com/coin/${document.coinId}/price`, {
+          headers: {
+            "X-RapidAPI-Key": RAPIDAPI_COINRANKING_KEY,
+            "X-RapidAPI-Host": "coinranking1.p.rapidapi.com"
+          }
+        });
+      
+      const curPrice = Number(data.data.price);
+      await collection.findOneAndUpdate({
+        _id: document._id
+      }, {
+        $set: {
+          currentValue: curPrice
+        }
+      });
+    } 
+    catch (err) {
+      console.log(err);
+    }
+  }
+}

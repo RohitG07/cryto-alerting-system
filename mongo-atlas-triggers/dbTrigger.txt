@@ -1,0 +1,37 @@
+// DATABASE TRIGGER
+
+exports = async function(changeEvent) {
+  const sgMail = require("@sendgrid/mail");
+  sgMail.setApiKey(SENDGRID_API_KEY);
+  
+  const curDocId = changeEvent.documentKey._id;
+  const fullDoc = changeEvent.fullDocument;
+  if(!fullDoc.status) return;
+  
+  const type = fullDoc.alertType;
+  const curValue = fullDoc.currentValue.toFixed(2);
+  const tarValue = fullDoc.targetValue.toFixed(2);
+  const coinName = fullDoc.coinName;
+  
+  if(type === "above" && curValue < tarValue) return;
+  if(type === "below" && curValue > tarValue) return;
+  
+  // FINDING USER EMAIL
+  const userCollection = context.services.get("CRYPTO-ALERT-MERN").db("CRYPTO-ALERTS").collection("users");
+  const curUser = await userCollection.findOne({ _id: fullDoc.createdBy });
+  const userEmail = curUser.email; 
+  
+  // SEND EMAIL
+  const msg = {
+    to: userEmail,
+    from: "cryptoalarm9@gmail.com",
+    subject: `A ${coinName} alert was triggered | Crypto Alarm`,
+    text: `The price of ${coinName} is ${type} the $${tarValue} limit. The current price is $${curValue}.`,
+    html: `<h1 style="text-align: center">Your ${coinName} Alert has been triggered</h1><p>The price of ${coinName} is ${type} the $${tarValue} limit. The current price is $${curValue}.</p>`
+  };
+  await sgMail.send(msg);
+  
+  // SET STATUS TO FALSE AFTER SENDING EMAIL
+  const alertCollection = context.services.get("CRYPTO-ALERT-MERN").db("CRYPTO-ALERTS").collection("alerts");
+  await alertCollection.findOneAndUpdate({ _id: curDocId }, { $set: { status: false } });
+};
